@@ -26,21 +26,23 @@ export async function checkDeadlineReminder(missionService: MissionService): Pro
   );
   if (dueThresholds.length === 0) return;
 
-  // If several thresholds are already in the past at once (e.g. VS Code was
-  // closed for a while), mark them all fired but only show one popup.
-  const loudestThreshold = Math.max(...dueThresholds);
+  // If several thresholds are already in the past at once (e.g. a short
+  // mission, or VS Code was closed for a while), mark them all fired but
+  // only show one popup — using the *actual* time left, not the largest
+  // threshold bucket (a 5-minute mission shouldn't be told "due in 1h").
   await missionService.markDeadlineRemindersFired(mission.id, [...alreadyFired, ...dueThresholds]);
 
   playBreakReminderSound();
   await showAnimatedPopup({
     kind: 'wiggle',
     title: 'Deadline coming up',
-    message: `⏳ "${mission.name}" is due in about ${formatThreshold(loudestThreshold)}. Finished already? Don't forget to mark it complete!`,
+    message: `⏳ "${mission.name}" is due in about ${formatMinutesLeft(minutesLeft)}. Finished already? Don't forget to mark it complete!`,
     buttons: [{ id: 'ok', label: 'Got it' }],
   });
 }
 
-function formatThreshold(minutes: number): string {
-  if (minutes >= 60) return `${Math.round(minutes / 60)}h`;
-  return `${minutes}m`;
+function formatMinutesLeft(minutes: number): string {
+  const rounded = Math.max(1, Math.round(minutes));
+  if (rounded >= 60) return `${Math.round(rounded / 60)}h`;
+  return `${rounded}m`;
 }
