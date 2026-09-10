@@ -1,5 +1,9 @@
 # Vesteganahuiyaa
 
+<p align="center">
+  <img src="assets/icon.png" alt="Vesteganahuiyaa mascot" width="160" />
+</p>
+
 Accountability and healthy-focus companion for VS Code. Set one mission, watch its deadline, and get called out (nicely) if you drift.
 
 ## Status
