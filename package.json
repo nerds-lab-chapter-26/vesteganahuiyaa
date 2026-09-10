@@ -6,6 +6,10 @@
   "publisher": "nerdslab",
   "private": true,
   "icon": "assets/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nerds-lab-chapter-26/vesteganahuiyaa.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -29,6 +33,18 @@
       {
         "command": "nerdslab.completeMission",
         "title": "Vesteganahuiyaa: Complete Mission"
+      },
+      {
+        "command": "nerdslab.startFocusSession",
+        "title": "Vesteganahuiyaa: Start Focus Session"
+      },
+      {
+        "command": "nerdslab.pauseFocusSession",
+        "title": "Vesteganahuiyaa: Pause Focus Session"
+      },
+      {
+        "command": "nerdslab.endFocusSession",
+        "title": "Vesteganahuiyaa: End Focus Session"
       },
       {
         "command": "nerdslab.resetLocalData",

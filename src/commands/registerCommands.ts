@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { MissionService, MissionValidationError } from '../mission/missionService';
 import { StatusBarController } from '../statusBar/statusBarController';
 import { completedOnTime } from '../mission/missionTypes';
+import { FocusTimer, FocusTimerError } from '../focus/focusTimer';
 
 const DEADLINE_FORMAT_HINT = 'YYYY-MM-DD HH:mm (24h, local time), e.g. 2026-09-15 18:00';
 
@@ -48,6 +49,7 @@ async function promptForDeadline(): Promise<string | undefined> {
 export function registerCommands(
   context: vscode.ExtensionContext,
   missionService: MissionService,
+  focusTimer: FocusTimer,
   statusBar: StatusBarController
 ): void {
   context.subscriptions.push(
@@ -79,16 +81,62 @@ export function registerCommands(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('nerdslab.completeMission', async () => {
-      const mission = await missionService.completeMission();
-      if (!mission) {
+      const active = missionService.getActiveMission();
+      if (!active) {
         vscode.window.showInformationMessage('No active mission to complete.');
         return;
       }
+
+      // FR-06: stop any running session before completing.
+      await focusTimer.end();
+
+      const mission = await missionService.completeMission();
+      if (!mission) return;
       statusBar.refresh();
       vscode.window.showInformationMessage(
         completedOnTime(mission)
           ? `Mission "${mission.name}" completed on time. Look at you.`
           : `Mission "${mission.name}" completed — late, but done beats undone.`
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('nerdslab.startFocusSession', async () => {
+      const mission = missionService.getActiveMission();
+      if (!mission) {
+        vscode.window.showInformationMessage('No active mission yet. Run "NerdsLab: Create Mission" first.');
+        return;
+      }
+      try {
+        await focusTimer.start(mission.id);
+        statusBar.refresh();
+        vscode.window.showInformationMessage(`Focus session started for "${mission.name}". Go.`);
+      } catch (err) {
+        const message = err instanceof FocusTimerError ? err.message : 'Could not start focus session.';
+        vscode.window.showWarningMessage(message);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('nerdslab.pauseFocusSession', async () => {
+      const session = await focusTimer.pause();
+      statusBar.refresh();
+      vscode.window.showInformationMessage(
+        session ? 'Focus session paused.' : 'No running focus session to pause.'
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('nerdslab.endFocusSession', async () => {
+      const session = await focusTimer.end();
+      statusBar.refresh();
+      vscode.window.showInformationMessage(
+        session
+          ? `Focus session ended — ${Math.round(session.focusedSeconds / 60)}m focused this session.`
+          : 'No focus session to end.'
       );
     })
   );
@@ -100,9 +148,12 @@ export function registerCommands(
         vscode.window.showInformationMessage('No active mission yet. Run "NerdsLab: Create Mission".');
         return;
       }
+      const { session, todayFocusedSeconds } = focusTimer.getStatus();
+      const sessionLine = session ? ` | session: ${session.state}` : ' | no session running';
       // Full webview dashboard (§7.7) lands in Milestone 3.
       vscode.window.showInformationMessage(
-        `${mission.name} — deadline ${new Date(mission.deadline).toLocaleString()}`
+        `${mission.name} — deadline ${new Date(mission.deadline).toLocaleString()} | ` +
+          `${Math.round(todayFocusedSeconds / 60)}m today${sessionLine}`
       );
     })
   );
@@ -116,6 +167,7 @@ export function registerCommands(
       );
       if (confirmed !== 'Delete everything') return;
 
+      await focusTimer.end();
       await missionService.resetAll();
       statusBar.refresh();
       vscode.window.showInformationMessage('NerdsLab local data has been reset.');

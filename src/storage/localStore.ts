@@ -1,17 +1,31 @@
 import * as vscode from 'vscode';
 import { Mission } from '../mission/missionTypes';
+import { DailyFocusSummary, FocusSession } from '../focus/focusTypes';
 
 const STORE_KEY = 'nerdslab.store';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface StoreShape {
   schemaVersion: number;
   activeMissionId: string | null;
   missions: Record<string, Mission>;
+  currentSession: FocusSession | null;
+  /** Keyed by `${date}:${missionId}` for O(1) lookup/merge. */
+  dailySummaries: Record<string, DailyFocusSummary>;
 }
 
 function emptyStore(): StoreShape {
-  return { schemaVersion: SCHEMA_VERSION, activeMissionId: null, missions: {} };
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    activeMissionId: null,
+    missions: {},
+    currentSession: null,
+    dailySummaries: {},
+  };
+}
+
+function dailyKey(date: string, missionId: string): string {
+  return `${date}:${missionId}`;
 }
 
 /**
@@ -27,7 +41,16 @@ export class LocalStore {
     if (!raw) {
       return emptyStore();
     }
-    // Future schema migrations branch on raw.schemaVersion here.
+    // v1 -> v2: focus tracking fields didn't exist yet. Backfill rather
+    // than discard existing mission data.
+    if (raw.schemaVersion < 2) {
+      return {
+        ...raw,
+        schemaVersion: SCHEMA_VERSION,
+        currentSession: raw.currentSession ?? null,
+        dailySummaries: raw.dailySummaries ?? {},
+      };
+    }
     return raw;
   }
 
@@ -56,6 +79,55 @@ export class LocalStore {
   async clearActiveMission(): Promise<void> {
     const store = this.read();
     store.activeMissionId = null;
+    await this.write(store);
+  }
+
+  getCurrentSession(): FocusSession | null {
+    return this.read().currentSession;
+  }
+
+  async saveCurrentSession(session: FocusSession | null): Promise<void> {
+    const store = this.read();
+    store.currentSession = session;
+    await this.write(store);
+  }
+
+  getDailyFocusedSeconds(date: string, missionId: string): number {
+    return this.read().dailySummaries[dailyKey(date, missionId)]?.focusedSeconds ?? 0;
+  }
+
+  /**
+   * Atomically adds `seconds` to both the mission's running total and
+   * today's daily summary, and persists the session snapshot alongside —
+   * one write covers everything the timer needs to survive a restart.
+   */
+  async recordFocusedSeconds(
+    missionId: string,
+    date: string,
+    seconds: number,
+    session: FocusSession | null,
+    newSessionStarted: boolean
+  ): Promise<void> {
+    const store = this.read();
+
+    const mission = store.missions[missionId];
+    if (mission) {
+      mission.totalFocusedSeconds += seconds;
+      store.missions[missionId] = mission;
+    }
+
+    if (seconds > 0) {
+      const key = dailyKey(date, missionId);
+      const existing = store.dailySummaries[key];
+      store.dailySummaries[key] = {
+        date,
+        missionId,
+        focusedSeconds: (existing?.focusedSeconds ?? 0) + seconds,
+        sessionCount: (existing?.sessionCount ?? 0) + (newSessionStarted ? 1 : 0),
+      };
+    }
+
+    store.currentSession = session;
     await this.write(store);
   }
 
