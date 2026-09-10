@@ -16,7 +16,22 @@ export interface Mission {
   dailyTargetMinutes: number;
   breakThresholdMinutes: number;
   totalFocusedSeconds: number;
+  /**
+   * Set the first (and only) time the overdue sound/notification fires for
+   * this mission. Persisted so a VS Code restart doesn't re-alert, and a
+   * fresh mission (new id) always starts unalerted.
+   */
+  overdueAlertedAt?: string; // ISO 8601
+  /**
+   * Which "deadline approaching" lead-time thresholds (in minutes) have
+   * already nudged the user for this mission — so a restart, or checking
+   * again a minute later, doesn't repeat the same reminder.
+   */
+  deadlineRemindersFired?: number[];
 }
+
+/** Lead times (minutes before the deadline) at which an approaching-deadline nudge fires. */
+export const DEADLINE_REMINDER_THRESHOLDS_MINUTES = [60, 30, 10];
 
 export const DEFAULT_DAILY_TARGET_MINUTES = 120;
 export const DEFAULT_BREAK_THRESHOLD_MINUTES = 180;

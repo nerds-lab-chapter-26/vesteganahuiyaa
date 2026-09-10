@@ -50,7 +50,8 @@ export class StatusBarController implements vscode.Disposable {
       return;
     }
 
-    const { session, isIdle, todayFocusedSeconds } = this.focusTimer.getStatus();
+    const { session, isIdle, todayFocusedSecondsForMission, todayFocusedSecondsOverall } =
+      this.focusTimer.getStatus();
     const overdue = isOverdue(mission);
 
     let sessionBadge = '';
@@ -62,9 +63,14 @@ export class StatusBarController implements vscode.Disposable {
 
     this.item.text =
       `$(clock) ${mission.name} | ${formatTimeRemaining(mission.deadline)} | ` +
-      `${formatMinutes(todayFocusedSeconds)} today${sessionBadge}`;
+      `${formatMinutes(todayFocusedSecondsForMission)} this mission | ` +
+      `${formatMinutes(todayFocusedSecondsOverall)} overall${sessionBadge}`;
 
-    const tooltipLines = [`Deadline: ${new Date(mission.deadline).toLocaleString()}`];
+    const tooltipLines = [
+      `Deadline: ${new Date(mission.deadline).toLocaleString()}`,
+      `Today on this mission: ${formatMinutes(todayFocusedSecondsForMission)}`,
+      `Today overall (all missions): ${formatMinutes(todayFocusedSecondsOverall)}`,
+    ];
     if (session?.state === 'running') {
       tooltipLines.push(isIdle ? 'Focus session running (idle — not counting)' : 'Focus session running');
     } else if (session?.state === 'paused') {

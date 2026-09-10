@@ -96,6 +96,13 @@ export class LocalStore {
     return this.read().dailySummaries[dailyKey(date, missionId)]?.focusedSeconds ?? 0;
   }
 
+  /** Sum of focused seconds across every mission for a given day. */
+  getDailyFocusedSecondsAllMissions(date: string): number {
+    return Object.values(this.read().dailySummaries)
+      .filter((summary) => summary.date === date)
+      .reduce((total, summary) => total + summary.focusedSeconds, 0);
+  }
+
   /**
    * Atomically adds `seconds` to both the mission's running total and
    * today's daily summary, and persists the session snapshot alongside —

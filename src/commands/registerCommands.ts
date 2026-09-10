@@ -3,8 +3,26 @@ import { MissionService, MissionValidationError } from '../mission/missionServic
 import { StatusBarController } from '../statusBar/statusBarController';
 import { completedOnTime } from '../mission/missionTypes';
 import { FocusTimer, FocusTimerError } from '../focus/focusTimer';
+import { showAnimatedPopup } from '../ui/animatedPopup';
 
 const DEADLINE_FORMAT_HINT = 'YYYY-MM-DD HH:mm (24h, local time), e.g. 2026-09-15 18:00';
+
+const ON_TIME_MESSAGES = [
+  (name: string) => `🏆 "${name}" — done, and on time. Certified legend behavior.`,
+  (name: string) => `🎉 "${name}" complete! Look at you, beating the clock like it's nothing.`,
+  (name: string) => `⭐ "${name}" is a wrap — early enough to actually relax now. Go treat yourself.`,
+  (name: string) => `🥳 Nailed it. "${name}" done before the deadline even noticed.`,
+];
+
+const LATE_MESSAGES = [
+  (name: string) => `✅ "${name}" is done — a little late, but hey, done beats undone every time.`,
+  (name: string) => `🎯 "${name}" complete! Fashionably late, but you still showed up. Respect.`,
+  (name: string) => `💪 Finished "${name}". Not on time, but you didn't quit — that counts for a lot.`,
+];
+
+function pickRandom<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
 
 function parseDeadline(value: string): Date | undefined {
   const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
@@ -93,11 +111,12 @@ export function registerCommands(
       const mission = await missionService.completeMission();
       if (!mission) return;
       statusBar.refresh();
-      vscode.window.showInformationMessage(
-        completedOnTime(mission)
-          ? `Mission "${mission.name}" completed on time. Look at you.`
-          : `Mission "${mission.name}" completed — late, but done beats undone.`
-      );
+      void showAnimatedPopup({
+        kind: 'celebrate',
+        title: 'Mission complete!',
+        message: pickRandom(completedOnTime(mission) ? ON_TIME_MESSAGES : LATE_MESSAGES)(mission.name),
+        buttons: [{ id: 'ok', label: 'Nice' }],
+      });
     })
   );
 
@@ -148,12 +167,13 @@ export function registerCommands(
         vscode.window.showInformationMessage('No active mission yet. Run "NerdsLab: Create Mission".');
         return;
       }
-      const { session, todayFocusedSeconds } = focusTimer.getStatus();
+      const { session, todayFocusedSecondsForMission, todayFocusedSecondsOverall } = focusTimer.getStatus();
       const sessionLine = session ? ` | session: ${session.state}` : ' | no session running';
       // Full webview dashboard (§7.7) lands in Milestone 3.
       vscode.window.showInformationMessage(
         `${mission.name} — deadline ${new Date(mission.deadline).toLocaleString()} | ` +
-          `${Math.round(todayFocusedSeconds / 60)}m today${sessionLine}`
+          `${Math.round(todayFocusedSecondsForMission / 60)}m on this mission today, ` +
+          `${Math.round(todayFocusedSecondsOverall / 60)}m overall today${sessionLine}`
       );
     })
   );

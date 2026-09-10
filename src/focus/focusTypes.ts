@@ -8,6 +8,15 @@ export interface FocusSession {
   focusedSeconds: number;
   idleSeconds: number;
   state: FocusSessionState;
+  /**
+   * Continuous focused seconds since the last break (reset on pause, on
+   * going idle, or when a break reminder is acted on/snoozed). Separate
+   * from `focusedSeconds`, which never resets for the session's lifetime.
+   */
+  secondsSinceBreak: number;
+  /** True once a break reminder has fired for the current stretch, so the
+   * tick loop doesn't re-fire it every 15s until the user acts or goes idle. */
+  breakAlertPending: boolean;
 }
 
 export interface DailyFocusSummary {
@@ -26,6 +35,9 @@ export const IDLE_THRESHOLD_MS = 5 * 60 * 1000;
  * minute" requirement) — writes are tiny JSON, so this is cheap.
  */
 export const TICK_INTERVAL_MS = 15 * 1000;
+
+/** How much a "Snooze" on a break reminder rewinds the continuous-focus counter by. */
+export const BREAK_SNOOZE_MINUTES = 5;
 
 export function todayLocalDate(now: Date = new Date()): string {
   const y = now.getFullYear();

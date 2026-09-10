@@ -95,4 +95,22 @@ export class MissionService {
     await this.store.resetAll();
     this._onDidChange.fire();
   }
+
+  /** Marks the overdue alert as fired so it never repeats for this mission. */
+  async markOverdueAlerted(missionId: string): Promise<void> {
+    const mission = this.getActiveMission();
+    if (!mission || mission.id !== missionId || mission.overdueAlertedAt) return;
+
+    await this.store.saveMission({ ...mission, overdueAlertedAt: new Date().toISOString() });
+    this._onDidChange.fire();
+  }
+
+  /** Records that the given lead-time thresholds (minutes) have now nudged the user. */
+  async markDeadlineRemindersFired(missionId: string, thresholds: number[]): Promise<void> {
+    const mission = this.getActiveMission();
+    if (!mission || mission.id !== missionId) return;
+
+    await this.store.saveMission({ ...mission, deadlineRemindersFired: thresholds });
+    this._onDidChange.fire();
+  }
 }

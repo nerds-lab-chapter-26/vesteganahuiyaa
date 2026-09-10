@@ -4,10 +4,18 @@ import { MissionService } from './mission/missionService';
 import { FocusTimer } from './focus/focusTimer';
 import { StatusBarController } from './statusBar/statusBarController';
 import { registerCommands } from './commands/registerCommands';
+import { checkOverdueAlert } from './reminders/deadlineAlert';
+import { registerBreakReminder } from './reminders/breakReminder';
+import { initAnimatedPopups } from './ui/animatedPopup';
+import { initSoundPlayer } from './reminders/soundPlayer';
+import { checkDeadlineReminder } from './reminders/deadlineReminder';
 
 const URGENCY_REFRESH_INTERVAL_MS = 60_000; // FR-05: recalc at least every 15 min; 1 min is cheap and precise.
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  initAnimatedPopups(context);
+  initSoundPlayer(context.extensionPath);
+
   const store = new LocalStore(context);
   const missionService = new MissionService(store);
   const focusTimer = new FocusTimer(store);
@@ -19,11 +27,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusBar = new StatusBarController(missionService, focusTimer);
 
   registerCommands(context, missionService, focusTimer, statusBar);
+  context.subscriptions.push(registerBreakReminder(focusTimer, missionService));
 
   statusBar.refresh();
+  // Also check immediately on activation — covers the deadline having
+  // passed (or coming up) while VS Code was closed (§15 edge case).
+  void checkOverdueAlert(missionService);
+  void checkDeadlineReminder(missionService);
   context.subscriptions.push(statusBar, focusTimer);
 
-  const interval = setInterval(() => statusBar.refresh(), URGENCY_REFRESH_INTERVAL_MS);
+  const interval = setInterval(() => {
+    statusBar.refresh();
+    void checkOverdueAlert(missionService);
+    void checkDeadlineReminder(missionService);
+  }, URGENCY_REFRESH_INTERVAL_MS);
   context.subscriptions.push({ dispose: () => clearInterval(interval) });
 }
 

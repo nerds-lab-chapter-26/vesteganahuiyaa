@@ -2,14 +2,24 @@ import * as vscode from 'vscode';
 import { LocalStore } from '../storage/localStore';
 import { ActivityTracker } from './activityTracker';
 import { Clock, systemClock } from '../core/clock';
-import { FocusSession, IDLE_THRESHOLD_MS, TICK_INTERVAL_MS, todayLocalDate } from './focusTypes';
+import {
+  BREAK_SNOOZE_MINUTES,
+  FocusSession,
+  IDLE_THRESHOLD_MS,
+  TICK_INTERVAL_MS,
+  todayLocalDate,
+} from './focusTypes';
+import { DEFAULT_BREAK_THRESHOLD_MINUTES } from '../mission/missionTypes';
 
 export class FocusTimerError extends Error {}
 
 export interface FocusStatus {
   session: FocusSession | null;
   isIdle: boolean;
-  todayFocusedSeconds: number;
+  /** Today's focused seconds for the currently active mission only. */
+  todayFocusedSecondsForMission: number;
+  /** Today's focused seconds across every mission (active + completed today). */
+  todayFocusedSecondsOverall: number;
 }
 
 /**
@@ -24,6 +34,10 @@ export interface FocusStatus {
 export class FocusTimer implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;
+
+  private readonly _onBreakDue = new vscode.EventEmitter<void>();
+  /** Fires once when continuous focus crosses the mission's break threshold. */
+  readonly onBreakDue = this._onBreakDue.event;
 
   private readonly activityTracker: ActivityTracker;
   private readonly activitySub: vscode.Disposable;
@@ -52,10 +66,18 @@ export class FocusTimer implements vscode.Disposable {
   getStatus(): FocusStatus {
     const session = this.store.getCurrentSession();
     const today = todayLocalDate();
-    const todayFocusedSeconds = session
-      ? this.store.getDailyFocusedSeconds(today, session.missionId)
+
+    // Keyed off the active mission, not `session.missionId` — a
+    // "completed" session lingers in storage (see `end()`) until the next
+    // one starts, so using the session's own mission id here would leak
+    // the previous mission's daily total onto a brand-new mission.
+    const activeMission = this.store.getActiveMission();
+    const todayFocusedSecondsForMission = activeMission
+      ? this.store.getDailyFocusedSeconds(today, activeMission.id)
       : 0;
-    return { session, isIdle: this.isIdle, todayFocusedSeconds };
+    const todayFocusedSecondsOverall = this.store.getDailyFocusedSecondsAllMissions(today);
+
+    return { session, isIdle: this.isIdle, todayFocusedSecondsForMission, todayFocusedSecondsOverall };
   }
 
   async start(missionId: string): Promise<FocusSession> {
@@ -82,6 +104,8 @@ export class FocusTimer implements vscode.Disposable {
       focusedSeconds: 0,
       idleSeconds: 0,
       state: 'running',
+      secondsSinceBreak: 0,
+      breakAlertPending: false,
     };
     await this.store.saveCurrentSession(session);
     this.lastActivityAt = this.clock.now();
@@ -96,11 +120,41 @@ export class FocusTimer implements vscode.Disposable {
     const session = this.store.getCurrentSession();
     if (!session || session.state !== 'running') return undefined;
 
-    const paused: FocusSession = { ...session, state: 'paused' };
+    // Any pause — manual or via a break reminder — ends the current
+    // continuous-focus stretch, so the next run starts counting fresh.
+    const paused: FocusSession = {
+      ...session,
+      state: 'paused',
+      secondsSinceBreak: 0,
+      breakAlertPending: false,
+    };
     await this.store.saveCurrentSession(paused);
     this.stopTicking();
     this._onDidChange.fire();
     return paused;
+  }
+
+  /** "Take a Break" from a break-reminder prompt — just pauses the session. */
+  async takeBreak(): Promise<FocusSession | undefined> {
+    return this.pause();
+  }
+
+  /**
+   * "Snooze" a break reminder — rewinds the continuous-focus counter so
+   * the reminder fires again after another `BREAK_SNOOZE_MINUTES`, instead
+   * of resetting it fully or nagging on every subsequent tick.
+   */
+  async snoozeBreak(): Promise<void> {
+    const session = this.store.getCurrentSession();
+    if (!session) return;
+
+    const snoozeSeconds = BREAK_SNOOZE_MINUTES * 60;
+    const rewound = Math.max(0, (session.secondsSinceBreak ?? 0) - snoozeSeconds);
+    await this.store.saveCurrentSession({
+      ...session,
+      secondsSinceBreak: rewound,
+      breakAlertPending: false,
+    });
   }
 
   async end(): Promise<FocusSession | undefined> {
@@ -159,12 +213,23 @@ export class FocusTimer implements vscode.Disposable {
     const tickSeconds = TICK_INTERVAL_MS / 1000;
     const idleGapMs = now - this.lastActivityAt;
     const currentlyIdle = idleGapMs >= IDLE_THRESHOLD_MS;
+    const wasIdle = this.isIdle;
     this.isIdle = currentlyIdle;
+
+    // Going idle counts as taking a natural break — start the next
+    // continuous-focus stretch from zero rather than treating the gap
+    // itself as unbroken focus.
+    const justWentIdle = currentlyIdle && !wasIdle;
+    const secondsSinceBreak = justWentIdle
+      ? 0
+      : (session.secondsSinceBreak ?? 0) + (currentlyIdle ? 0 : tickSeconds);
 
     const updated: FocusSession = {
       ...session,
       focusedSeconds: session.focusedSeconds + (currentlyIdle ? 0 : tickSeconds),
       idleSeconds: session.idleSeconds + (currentlyIdle ? tickSeconds : 0),
+      secondsSinceBreak,
+      breakAlertPending: justWentIdle ? false : (session.breakAlertPending ?? false),
     };
 
     const newSessionStarted = this.isNewSession;
@@ -178,6 +243,16 @@ export class FocusTimer implements vscode.Disposable {
       newSessionStarted
     );
     this._onDidChange.fire();
+
+    if (!currentlyIdle && !updated.breakAlertPending) {
+      const mission = this.store.getActiveMission();
+      const thresholdSeconds =
+        (mission?.breakThresholdMinutes ?? DEFAULT_BREAK_THRESHOLD_MINUTES) * 60;
+      if (updated.secondsSinceBreak >= thresholdSeconds) {
+        await this.store.saveCurrentSession({ ...updated, breakAlertPending: true });
+        this._onBreakDue.fire();
+      }
+    }
   }
 
   dispose(): void {
@@ -185,5 +260,6 @@ export class FocusTimer implements vscode.Disposable {
     this.activitySub.dispose();
     this.activityTracker.dispose();
     this._onDidChange.dispose();
+    this._onBreakDue.dispose();
   }
 }

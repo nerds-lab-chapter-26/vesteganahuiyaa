@@ -23,7 +23,7 @@ Accountability and healthy-focus companion for VS Code. Set one mission, watch i
 Milestones 1–2 done — mission tracking plus real focus-time tracking:
 
 - `Vesteganahuiyaa: Create Mission` — asks for a mission name and a future deadline.
-- Active mission is shown in the status bar (name, time remaining, today's focused minutes) and survives closing/reopening VS Code.
+- Active mission is shown in the status bar (name, time remaining, today's focused minutes **on this mission** plus today's total **across all missions**) and survives closing/reopening VS Code.
 - `Vesteganahuiyaa: Start Focus Session` — starts (or resumes, if paused) tracking for the active mission.
 - `Vesteganahuiyaa: Pause Focus Session` / `Vesteganahuiyaa: End Focus Session`.
 - Focus time only accumulates while you're active in the editor (typing, navigating, scrolling, switching terminals). After 5 minutes with no supported activity signal, counting pauses automatically; it resumes the moment activity returns.
@@ -31,7 +31,12 @@ Milestones 1–2 done — mission tracking plus real focus-time tracking:
 - `Vesteganahuiyaa: Open Dashboard` — placeholder until the full webview dashboard lands.
 - `Vesteganahuiyaa: Reset Local Data` — wipes local mission data (confirmation required).
 
-No break reminders or dashboard UI yet — see `PRD.md` for the full spec and milestone order.
+- Deadline reminders — a heads-up nudge (softer sound + wiggle mascot popup) at 60/30/10 minutes before the deadline, in case you actually finished but forgot to run "Complete Mission". Each lead time fires once per mission.
+- Overdue alert — the moment an active mission's deadline passes, you get a custom alert sound plus an animated mascot popup (shake) with a **Complete Mission** button. Fires exactly once per mission (a restart won't re-trigger it), and also checks on VS Code startup in case the deadline passed while it was closed.
+- Break reminders — once you've focused continuously for a mission's break threshold (3 hours by default), you get a softer sound plus an animated mascot popup (wiggle) with **Take a Break** (pauses the session) or **Snooze 5 min**. Going idle for 5+ minutes counts as a natural break and resets the counter too, so it won't double-nag.
+- Mission complete gets its own celebration — a confetti + bounce mascot popup with a randomized, hopefully-funny congrats message instead of a plain toast.
+
+No full dashboard webview yet — see `PRD.md` for the full spec and milestone order.
 
 ### What counts as "activity"
 
