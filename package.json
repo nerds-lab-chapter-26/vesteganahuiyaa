@@ -4,7 +4,7 @@
   "description": "Accountability and healthy-focus companion for VS Code. Set a mission, beat its deadline, no excuses.",
   "version": "0.1.0",
   "publisher": "nerdslab",
-  "private": true,
+  "license": "MIT",
   "icon": "assets/icon.png",
   "repository": {
     "type": "git",
