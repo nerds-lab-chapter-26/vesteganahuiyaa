@@ -4,7 +4,19 @@
   <img src="assets/icon.png" alt="Vesteganahuiyaa mascot" width="160" />
 </p>
 
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=nerdslab.vesteganahuiyaa">
+    <img src="https://img.shields.io/visual-studio-marketplace/v/nerdslab.vesteganahuiyaa?label=VS%20Code%20Marketplace&color=blue" alt="VS Code Marketplace version" />
+  </a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=nerdslab.vesteganahuiyaa">
+    <img src="https://img.shields.io/visual-studio-marketplace/i/nerdslab.vesteganahuiyaa?label=installs" alt="Installs" />
+  </a>
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License" />
+</p>
+
 Accountability and healthy-focus companion for VS Code. Set one mission, watch its deadline, and get called out (nicely) if you drift.
+
+**[Install from the VS Code Marketplace →](https://marketplace.visualstudio.com/items?itemName=nerdslab.vesteganahuiyaa)**
 
 ## Status
 
