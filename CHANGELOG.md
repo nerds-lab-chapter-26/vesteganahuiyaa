@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-10
+
+### Fixed
+
+- Deadline reminder always showed "1h" for the time left, even on a short mission where all lead-time thresholds (60/30/10 min) crossed at once. Now shows the mission's actual remaining time.
+
 ## [0.2.0] - 2026-09-10
 
 ### Added
